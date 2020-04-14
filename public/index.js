@@ -1,3 +1,4 @@
+const usenIdexedDB = require("./indexedDB.js")
 let transactions = [];
 let myChart;
 
@@ -85,8 +86,6 @@ function saveRecord(transaction) {
   store,
   index;
 
-  // name, value, date
-
   request.onupgradeneeded = e => {
     let db = request.result,
     store = db.createObjectStore("transactionsStore", {autoIncrement: true}),
@@ -106,6 +105,57 @@ function saveRecord(transaction) {
     store.put(transaction);
 
     tx.oncomplete = () => db.close();
+  }
+}
+
+function addBulk() {
+  let request = window.indexedDB.open("transactions", 1),
+    db,
+    tx,
+    store,
+    index;
+  
+  request.onupgradeneeded = e => {
+    let db = request.result,
+      store = db.createObjectStore("transactionsStore", { autoIncrement: true }),
+      index = store.createIndex("name", "name", { unique: false });
+  };
+
+  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
+
+  request.onsuccess = e => {
+    db  = request.result;
+    tx = db.transaction("transactionsStore", "readwrite");
+    store = tx.objectStore("transactionsStore");
+    index = store.index("name");
+
+    const allResults = store.getAll();
+    allResults.onsuccess = () => {
+      fetch("/api/transaction/bulk", {
+        method: "POST",
+        body: JSON.stringify(allResults.result),
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        }
+      }).then(() => {
+        let request = window.indexedDB.open("transactions", 1),
+          db,
+          tx,
+          store;
+
+        request.onerror = e => console.log("There was an error: " + e.target.errorCode);
+
+        request.onsuccess = e => {
+          db = request.result;
+          tx = db.transaction("transactionsStore", "readwrite");
+          store = tx.objectStore("transactionsStore");
+          store.clear();
+        }
+      })
+    }
+
+    db.close();
   }
 }
 
@@ -183,3 +233,20 @@ document.querySelector("#add-btn").onclick = function() {
 document.querySelector("#sub-btn").onclick = function() {
   sendTransaction(false);
 };
+
+window.addEventListener('online', addBulk);
+window.addEventListener('load', () => {
+  let request = window.indexedDB.open("transactions", 1),
+    db,
+    tx,
+    store,
+    index;
+
+  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
+
+  request.onsuccess = e => {
+    if (navigator.onLine) {
+      addBulk();
+    } 
+  }
+});
