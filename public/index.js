@@ -1,6 +1,50 @@
-const usenIdexedDB = require("./indexedDB.js")
 let transactions = [];
 let myChart;
+
+function useIndexedDb(databaseName, storeName, method, object) {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(databaseName, 1);
+    let db,
+      tx,
+      store;
+      console.log("Database opened")
+
+    request.onupgradeneeded = function(e) {
+      const db = request.result;
+      db.createObjectStore(storeName, { autoIncrement: true });
+    };
+
+    request.onerror = function(e) {
+      console.log("There was an error");
+    };
+
+    request.onsuccess = function(e) {
+      db = request.result;
+      console.log("store  accessed.")
+      tx = db.transaction(storeName, "readwrite");
+      store = tx.objectStore(storeName);
+
+      db.onerror = function(e) {
+        console.log("error");
+      };
+      if (method === "put") {
+        store.put(object);
+      }
+      if (method === "clear") {
+        store.clear();
+      }
+      if (method === "get") {
+        const all = store.getAll();
+        all.onsuccess = function () {
+          resolve(all.result);
+        };
+      }
+      tx.oncomplete = function () {
+        db.close();
+      };
+    };
+  });
+};
 
 fetch("/api/transaction")
   .then(response => {
@@ -80,35 +124,11 @@ function populateChart() {
 }
 
 function saveRecord(transaction) {
-  let request = window.indexedDB.open("transactions", 1),
-  db,
-  tx,
-  store,
-  index;
-
-  request.onupgradeneeded = e => {
-    let db = request.result,
-    store = db.createObjectStore("transactionsStore", {autoIncrement: true}),
-    index = store.createIndex("name", "name", {unique: false});
-  };
-
-  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
-  
-  request.onsuccess = e => {
-    db = request.result;
-    tx = db.transaction("transactionsStore", "readwrite");
-    store = tx.objectStore("transactionsStore");
-    index = store.index("name");
-
-    db.onerror = e => console.log("ERROR: " + e.target.errorCode);
-
-    store.put(transaction);
-
-    tx.oncomplete = () => db.close();
-  }
-}
+  useIndexedDb("transactions", "transactionsStore", "put", transaction);
+};
 
 function addBulk() {
+  useIndexedDb("transactions", "transactionsStore", "get");
   let request = window.indexedDB.open("transactions", 1),
     db,
     tx,
@@ -127,7 +147,6 @@ function addBulk() {
     db  = request.result;
     tx = db.transaction("transactionsStore", "readwrite");
     store = tx.objectStore("transactionsStore");
-    index = store.index("name");
 
     const allResults = store.getAll();
     allResults.onsuccess = () => {
@@ -217,7 +236,7 @@ function sendTransaction(isAdding) {
   })
   .catch(err => {
     // fetch failed, so save in indexed db
-    console.log("wow")
+    console.log("Saving locally.")
     saveRecord(transaction);
 
     // clear form
@@ -246,7 +265,7 @@ window.addEventListener('load', () => {
 
   request.onsuccess = e => {
     if (navigator.onLine) {
-      addBulk();
+      // addBulk();
     } 
   }
 });
