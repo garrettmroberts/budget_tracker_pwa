@@ -78,6 +78,37 @@ function populateChart() {
   });
 }
 
+function saveRecord(transaction) {
+  let request = window.indexedDB.open("transactions", 1),
+  db,
+  tx,
+  store,
+  index;
+
+  // name, value, date
+
+  request.onupgradeneeded = e => {
+    let db = request.result,
+    store = db.createObjectStore("transactionsStore", {autoIncrement: true}),
+    index = store.createIndex("name", "name", {unique: false});
+  };
+
+  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
+  
+  request.onsuccess = e => {
+    db = request.result;
+    tx = db.transaction("transactionsStore", "readwrite");
+    store = tx.objectStore("transactionsStore");
+    index = store.index("name");
+
+    db.onerror = e => console.log("ERROR: " + e.target.errorCode);
+
+    store.put(transaction);
+
+    tx.oncomplete = () => db.close();
+  }
+}
+
 function sendTransaction(isAdding) {
   let nameEl = document.querySelector("#t-name");
   let amountEl = document.querySelector("#t-amount");
@@ -136,6 +167,7 @@ function sendTransaction(isAdding) {
   })
   .catch(err => {
     // fetch failed, so save in indexed db
+    console.log("wow")
     saveRecord(transaction);
 
     // clear form

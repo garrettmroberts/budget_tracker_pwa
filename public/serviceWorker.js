@@ -10,6 +10,7 @@ const FILES_TO_CACHE = [
 const STATIC_CACHE_NAME = 'static-cache';
 const DATA_CACHE_NAME = 'data-cache';
 
+// Precaches static files
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(STATIC_CACHE_NAME).then(cache => {
@@ -21,6 +22,7 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
+// Cleans out unnecessary caches; claims remainder.
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keyList => {
@@ -39,18 +41,22 @@ self.addEventListener('activate', e => {
 });
 
 
+// Intercepts fetches
 self.addEventListener('fetch', e => {
   if (e.request.url.includes('/api')) {
     e.respondWith(
       caches.open(DATA_CACHE_NAME).then(cache => {
         return fetch(e.request)
         .then(response => {
+
+          // Returns response, caches data if online.
           if (response.status === 200) {
             cache.put(e.request.url, response.clone())
           }
-
           return response;
         })
+
+        // Returns cache if offline
         .catch(err => {
           return cache.match(e.request);
         });
@@ -59,6 +65,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
+  // Returns static files via server or local cache if necessary
   e.respondWith(
     caches.open(STATIC_CACHE_NAME).then(cache => {
       return cache.match(e.request).then(response => {
