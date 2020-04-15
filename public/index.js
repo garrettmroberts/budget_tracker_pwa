@@ -3,7 +3,7 @@ let myChart;
 
 function useIndexedDb(databaseName, storeName, method, object) {
   return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(databaseName, 1);
+    const request = window.indexedDB.open(databaseName, 2);
     let db,
       tx,
       store;
@@ -265,7 +265,7 @@ window.addEventListener('load', () => {
 
   request.onsuccess = e => {
     if (navigator.onLine) {
-      // addBulk();
+      addBulk();
     } 
   }
 });
