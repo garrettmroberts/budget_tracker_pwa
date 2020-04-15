@@ -3,11 +3,10 @@ let myChart;
 
 function useIndexedDb(databaseName, storeName, method, object) {
   return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(databaseName, 2);
+    const request = window.indexedDB.open(databaseName, 1);
     let db,
       tx,
       store;
-      console.log("Database opened")
 
     request.onupgradeneeded = function(e) {
       const db = request.result;
@@ -28,10 +27,26 @@ function useIndexedDb(databaseName, storeName, method, object) {
         console.log("error");
       };
       if (method === "put") {
+        console.log("SAVING");
         store.put(object);
       }
       if (method === "clear") {
-        store.clear();
+        fetch("/api/transaction/bulk", {
+          method: "POST",
+          body: JSON.stringify(store.getAll()),
+          headers: {
+            Accept: "application/json, text/plain, */*",
+            "Content-Type": "application/json"
+          }
+        }).then(() => {
+          let cleared = store.clear();
+          cleared.onsuccess = function() {
+            console.log('successfully cleared!');
+          };
+        }).catch(e => {
+          console.log(e);
+        });
+        
       }
       if (method === "get") {
         const all = store.getAll();
@@ -46,18 +61,20 @@ function useIndexedDb(databaseName, storeName, method, object) {
   });
 };
 
-fetch("/api/transaction")
-  .then(response => {
-    return response.json();
-  })
-  .then(data => {
-    // save db data on global variable
-    transactions = data;
-
-    populateTotal();
-    populateTable();
-    populateChart();
-  });
+function buildTable() {
+  fetch("/api/transaction")
+    .then(response => {
+      return response.json();
+    })
+    .then(data => {
+      // save db data on global variable
+      transactions = data;
+  
+      populateTotal();
+      populateTable();
+      populateChart();
+    });
+}
 
 function populateTotal() {
   // reduce transaction amounts to a single total value
@@ -128,54 +145,9 @@ function saveRecord(transaction) {
 };
 
 function addBulk() {
-  useIndexedDb("transactions", "transactionsStore", "get");
-  let request = window.indexedDB.open("transactions", 1),
-    db,
-    tx,
-    store,
-    index;
-  
-  request.onupgradeneeded = e => {
-    let db = request.result,
-      store = db.createObjectStore("transactionsStore", { autoIncrement: true }),
-      index = store.createIndex("name", "name", { unique: false });
-  };
-
-  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
-
-  request.onsuccess = e => {
-    db  = request.result;
-    tx = db.transaction("transactionsStore", "readwrite");
-    store = tx.objectStore("transactionsStore");
-
-    const allResults = store.getAll();
-    allResults.onsuccess = () => {
-      fetch("/api/transaction/bulk", {
-        method: "POST",
-        body: JSON.stringify(allResults.result),
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Content-Type": "application/json"
-        }
-      }).then(() => {
-        let request = window.indexedDB.open("transactions", 1),
-          db,
-          tx,
-          store;
-
-        request.onerror = e => console.log("There was an error: " + e.target.errorCode);
-
-        request.onsuccess = e => {
-          db = request.result;
-          tx = db.transaction("transactionsStore", "readwrite");
-          store = tx.objectStore("transactionsStore");
-          store.clear();
-        }
-      })
-    }
-
-    db.close();
-  }
+  useIndexedDb("transactions", "transactionsStore", "get").then(() => {
+  useIndexedDb("transactions", "transactionsStore", "clear");
+  });
 }
 
 function sendTransaction(isAdding) {
@@ -255,17 +227,10 @@ document.querySelector("#sub-btn").onclick = function() {
 
 window.addEventListener('online', addBulk);
 window.addEventListener('load', () => {
-  let request = window.indexedDB.open("transactions", 1),
-    db,
-    tx,
-    store,
-    index;
-
-  request.onerror = e => console.log("There was an error: " + e.target.errorCode);
-
-  request.onsuccess = e => {
+  useIndexedDb("transactions", "transactionsStore", "get").then(() => {
     if (navigator.onLine) {
       addBulk();
-    } 
-  }
+    };
+  });
+  buildTable();
 });
