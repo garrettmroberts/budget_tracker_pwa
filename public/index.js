@@ -19,13 +19,13 @@ function useIndexedDb(databaseName, storeName, method, object) {
 
     request.onsuccess = function (e) {
       db = request.result;
-      console.log("store  accessed.")
       tx = db.transaction(storeName, "readwrite");
       store = tx.objectStore(storeName);
 
       db.onerror = function (e) {
         console.log("error");
       };
+
       if (method === "put") {
         const action = store.put(object);
         action.oncomplete = (() => db.close());
@@ -33,25 +33,11 @@ function useIndexedDb(databaseName, storeName, method, object) {
       if (method === "clear") {
         const all = store.getAll();
         all.onsuccess = function () {
-          if (all.result.length > 1) {
-            fetch("/api/transaction/bulk", {
-              method: "POST",
-              body: JSON.stringify(all.result),
-              headers: {
-                Accept: "application/json, text/plain, */*",
-                "Content-Type": "application/json"
-              }
-            }).then(() => {
-              const cleared = store.clear();
-              cleared.onsuccess = () => {
-                console.log("Cleared");
-              }
-            }).catch(e => {
-              console.log(e);
-            }).then(() => {
-              db.close();
-            });
-          };
+          const cleared = all.source.clear();
+          resolve(all.result);
+          cleared.onsuccess = () => {
+            db.close();
+          }
         };
       };
       if (method === "get") {
@@ -149,8 +135,17 @@ function saveRecord(transaction) {
 };
 
 function addBulk() {
-  useIndexedDb("transactions", "transactionsStore", "get").then(() => {
-    useIndexedDb("transactions", "transactionsStore", "clear")
+  useIndexedDb("transactions", "transactionsStore", "clear").then(data => {
+    if (data.length > 1) {
+      fetch("/api/transaction/bulk", {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        },
+      });
+    }
   });
 }
 
@@ -212,7 +207,6 @@ function sendTransaction(isAdding) {
     })
     .catch(err => {
       // fetch failed, so save in indexed db
-      console.log("Saving locally.")
       saveRecord(transaction);
 
       // clear form
@@ -229,7 +223,9 @@ document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
 
-window.addEventListener('online', addBulk);
+window.addEventListener('online', () => {
+  addBulk();
+});
 window.addEventListener('load', () => {
   useIndexedDb("transactions", "transactionsStore", "get").then(() => {
     if (navigator.onLine) {
